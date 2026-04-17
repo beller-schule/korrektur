@@ -1,0 +1,951 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Auswertung – WPU 3D-Druck</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0a0c11;--surface:#12141c;--card:#181b26;--card2:#1e2130;
+  --border:#252836;--border2:#323648;
+  --accent:#6c8fff;--ok:#22c55e;--ok-l:rgba(34,197,94,.1);
+  --err:#ef4444;--err-l:rgba(239,68,68,.1);
+  --warn:#f97316;--warn-l:rgba(249,115,22,.1);
+  --flag:#eab308;--info:#60a5fa;
+  --text:#e8eaf4;--muted:#6b7088;--radius:11px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Instrument Sans',sans-serif;min-height:100vh}
+body::before{content:'';position:fixed;inset:0;
+  background-image:linear-gradient(rgba(108,143,255,.02) 1px,transparent 1px),
+  linear-gradient(90deg,rgba(108,143,255,.02) 1px,transparent 1px);
+  background-size:32px 32px;pointer-events:none;z-index:0}
+@keyframes rise{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+.hidden{display:none!important}
+
+/* ══ DROP SCREEN ══ */
+#drop-screen{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;position:relative;z-index:1}
+.drop-card{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:48px 44px;width:100%;max-width:600px;box-shadow:0 8px 48px rgba(0,0,0,.5);animation:rise .5s ease}
+.eyebrow{display:inline-flex;align-items:center;gap:8px;font-family:'Syne',sans-serif;font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--accent);margin-bottom:18px}
+.eyebrow::before{content:'';width:18px;height:2px;background:var(--accent);border-radius:99px}
+.drop-card h1{font-family:'Syne',sans-serif;font-size:28px;font-weight:800;margin-bottom:8px}
+.drop-card .sub{color:var(--muted);font-size:14px;line-height:1.6;margin-bottom:28px}
+
+/* two drop zones side by side */
+.drop-zones{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px}
+@media(max-width:560px){.drop-zones{grid-template-columns:1fr}}
+.drop-zone{border:2px dashed var(--border);border-radius:12px;padding:28px 16px;cursor:pointer;transition:border-color .2s,background .2s;position:relative;text-align:center}
+.drop-zone:hover,.drop-zone.drag{border-color:var(--accent);background:rgba(108,143,255,.05)}
+.drop-zone.ok-zone:hover,.drop-zone.ok-zone.drag{border-color:var(--ok);background:rgba(34,197,94,.05)}
+.drop-zone input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.dz-icon{font-size:28px;margin-bottom:8px;display:block}
+.dz-label{font-family:'Syne',sans-serif;font-size:13px;font-weight:700;margin-bottom:4px}
+.dz-sub{font-size:12px;color:var(--muted)}
+.dz-tag{display:inline-block;margin-top:8px;font-family:'Syne',sans-serif;font-size:10px;font-weight:700;padding:2px 9px;border-radius:99px;letter-spacing:.5px}
+.dz-tag.abgaben{background:rgba(108,143,255,.12);color:var(--accent);border:1px solid rgba(108,143,255,.3)}
+.dz-tag.korrekturen{background:var(--ok-l);color:var(--ok);border:1px solid rgba(34,197,94,.3)}
+.info-hint{background:rgba(108,143,255,.07);border:1px solid rgba(108,143,255,.18);border-radius:9px;padding:12px 14px;font-size:12px;color:var(--info);line-height:1.55}
+
+/* ══ PW MODAL ══ */
+.pw-overlay{position:fixed;inset:0;z-index:800;background:rgba(0,0,0,.75);backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;padding:24px;animation:fadeIn .2s ease}
+.pw-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:40px 36px;max-width:380px;width:100%;text-align:center;box-shadow:0 24px 64px rgba(0,0,0,.6);animation:rise .3s ease}
+.pw-card h2{font-family:'Syne',sans-serif;font-size:20px;font-weight:800;margin-bottom:8px}
+.pw-card p{color:var(--muted);font-size:14px;margin-bottom:22px}
+.pw-row{display:flex;gap:8px}
+.pw-inp{flex:1;background:var(--card);border:1.5px solid var(--border);border-radius:8px;padding:11px 13px;font-family:'Instrument Sans',sans-serif;font-size:15px;color:var(--text);transition:border-color .15s}
+.pw-inp:focus{outline:none;border-color:var(--accent)}
+.pw-btn{padding:11px 18px;border-radius:8px;font-family:'Syne',sans-serif;font-size:14px;font-weight:700;background:var(--accent);color:#fff;border:none;cursor:pointer}
+.pw-err{color:var(--err);font-size:13px;margin-top:10px;min-height:18px}
+.pw-cancel{background:none;border:none;color:var(--muted);font-size:13px;cursor:pointer;margin-top:14px;text-decoration:underline}
+
+/* ══ MAIN ══ */
+#main-screen{display:none;position:relative;z-index:1}
+.main-header{background:var(--surface);border-bottom:1px solid var(--border);padding:0 20px;height:56px;display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:200;box-shadow:0 2px 20px rgba(0,0,0,.5)}
+.mh-title{font-family:'Syne',sans-serif;font-size:14px;font-weight:800}
+.mh-title span{color:var(--accent)}
+.mh-space{flex:1}
+.mh-btn{padding:7px 13px;border-radius:7px;font-family:'Syne',sans-serif;font-size:12px;font-weight:700;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer;transition:all .15s;white-space:nowrap}
+.mh-btn:hover{border-color:var(--accent);color:var(--accent)}
+.mh-btn.on{background:rgba(108,143,255,.15);border-color:var(--accent);color:var(--accent)}
+.mh-sep{width:1px;height:22px;background:var(--border);flex-shrink:0}
+.mode-badge{padding:4px 11px;border-radius:6px;font-family:'Syne',sans-serif;font-size:11px;font-weight:700;letter-spacing:.3px}
+.mode-badge.corr{background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);color:var(--err)}
+
+.file-chips{display:flex;gap:6px;flex-wrap:wrap;padding:9px 18px;border-bottom:1px solid var(--border);background:var(--surface)}
+.fchip-class{font-family:'Syne',sans-serif;font-size:11px;font-weight:700;padding:4px 11px;border-radius:7px;background:var(--card2);border:1px solid var(--border2);color:var(--muted)}
+.fchip{padding:4px 11px;border-radius:7px;font-size:13px;font-weight:500;background:var(--card);border:1px solid var(--border);cursor:pointer;transition:all .15s}
+.fchip:hover{border-color:var(--accent)}
+.fchip.active{background:rgba(108,143,255,.12);border-color:var(--accent);color:var(--accent)}
+
+.tabs{display:flex;border-bottom:1px solid var(--border);padding:0 20px;background:var(--surface)}
+.tab{padding:12px 16px;font-family:'Syne',sans-serif;font-size:13px;font-weight:700;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;transition:all .15s}
+.tab:hover{color:var(--text)}
+.tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+
+.tab-content{display:none;padding:22px;max-width:1100px;margin:0 auto}
+.tab-content.active{display:block}
+
+/* ══ SHARED COMPONENTS ══ */
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(148px,1fr));gap:10px;margin-bottom:20px}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px}
+.sc-val{font-family:'Syne',sans-serif;font-size:28px;font-weight:800;line-height:1;margin-bottom:4px}
+.sc-label{font-size:12px;color:var(--muted)}
+.ok-val{color:var(--ok)}.warn-val{color:var(--warn)}.err-val{color:var(--err)}.acc-val{color:var(--accent)}
+
+.tbl-wrap{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:20px}
+.tbl-head{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--border)}
+.tbl-head h3{font-family:'Syne',sans-serif;font-size:13px;font-weight:700}
+table{width:100%;border-collapse:collapse}
+th{font-family:'Syne',sans-serif;font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted);padding:10px 14px;text-align:left;border-bottom:1px solid var(--border);background:var(--card2)}
+td{padding:10px 14px;font-size:14px;border-bottom:1px solid var(--border)}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:rgba(255,255,255,.01)}
+.pill{display:inline-block;font-family:'Syne',sans-serif;font-size:10px;font-weight:700;padding:2px 7px;border-radius:5px}
+.pill-ok{background:var(--ok-l);color:var(--ok);border:1px solid rgba(34,197,94,.25)}
+.pill-warn{background:var(--warn-l);color:var(--warn);border:1px solid rgba(249,115,22,.25)}
+.pill-err{background:var(--err-l);color:var(--err);border:1px solid rgba(239,68,68,.25)}
+.pill-open{background:rgba(108,143,255,.1);color:var(--accent);border:1px solid rgba(108,143,255,.25)}
+
+.sbar-wrap{display:flex;align-items:center;gap:7px}
+.sbar-track{flex:1;height:5px;background:var(--border);border-radius:99px;overflow:hidden;min-width:36px}
+.sbar-fill{height:100%;border-radius:99px}
+.sbar-num{font-family:'Syne',sans-serif;font-size:11px;font-weight:700;min-width:28px;text-align:right}
+
+.cat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-bottom:20px}
+.cat-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:14px}
+.cat-card h4{font-family:'Syne',sans-serif;font-size:10px;font-weight:700;margin-bottom:10px;color:var(--muted);letter-spacing:.5px;text-transform:uppercase}
+.cat-row{display:flex;align-items:center;gap:9px;margin-bottom:6px;font-size:12px}
+.cat-name{width:75px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cat-track{flex:1;height:4px;background:var(--border);border-radius:99px;overflow:hidden}
+.cat-fill{height:100%;border-radius:99px}
+.cat-pct{font-family:'Syne',sans-serif;font-size:11px;font-weight:700;color:var(--muted);min-width:28px;text-align:right}
+
+.grade-scale-wrap{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:20px}
+.grade-scale-wrap h3{font-family:'Syne',sans-serif;font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.5px;text-transform:uppercase;margin-bottom:12px}
+.grade-chips{display:flex;gap:5px;flex-wrap:wrap}
+.gchip{display:flex;flex-direction:column;align-items:center;padding:7px 9px;border-radius:7px;min-width:50px}
+.gchip .gn{font-family:'Syne',sans-serif;font-size:14px;font-weight:800}
+.gchip .gp{font-size:10px;color:var(--muted);margin-top:1px;text-align:center}
+
+/* ══ PRESENTATION MODE ══ */
+#pres-mode{display:none;position:fixed;inset:0;z-index:300;background:var(--bg);overflow-y:auto}
+#pres-mode.active{display:block}
+.pres-header{background:var(--surface);border-bottom:1px solid var(--border);padding:0 40px;height:60px;display:flex;align-items:center;gap:14px;position:sticky;top:0;z-index:10}
+.pres-title{font-family:'Syne',sans-serif;font-size:18px;font-weight:800}
+.pres-title span{color:var(--ok)}
+.pres-close{padding:8px 18px;border-radius:8px;font-family:'Syne',sans-serif;font-size:13px;font-weight:700;background:var(--card2);border:1px solid var(--border);color:var(--muted);cursor:pointer;margin-left:auto}
+.pres-close:hover{border-color:var(--accent);color:var(--text)}
+.pres-body{padding:36px;max-width:1100px;margin:0 auto}
+.pres-section{margin-bottom:36px}
+.pres-section-title{font-family:'Syne',sans-serif;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);margin-bottom:16px;display:flex;align-items:center;gap:10px}
+.pres-section-title::after{content:'';flex:1;height:1px;background:var(--border)}
+.pres-stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px}
+.pres-stat{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:22px 18px}
+.pres-stat .psv{font-family:'Syne',sans-serif;font-size:38px;font-weight:800;line-height:1;margin-bottom:5px}
+.pres-stat .psl{font-size:14px;color:var(--muted)}
+
+/* ══ CORRECTION / DETAIL ══ */
+.save-bar{background:var(--card2);border:1px solid var(--border);border-radius:var(--radius);padding:14px 18px;margin-bottom:18px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.save-bar-title{font-family:'Syne',sans-serif;font-size:13px;font-weight:700}
+.save-bar-sub{font-size:12px;color:var(--muted)}
+.save-space{flex:1}
+.save-btn{padding:8px 16px;border-radius:8px;font-family:'Syne',sans-serif;font-size:12px;font-weight:700;cursor:pointer;transition:all .15s;white-space:nowrap}
+.save-btn.ind{background:rgba(108,143,255,.15);border:1px solid rgba(108,143,255,.3);color:var(--accent)}
+.save-btn.ind:hover{background:rgba(108,143,255,.25)}
+.save-btn.cls{background:var(--ok-l);border:1px solid rgba(34,197,94,.3);color:var(--ok)}
+.save-btn.cls:hover{background:rgba(34,197,94,.2)}
+.save-msg{font-size:12px;color:var(--ok);display:none}
+
+.detail-header{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:20px;flex-wrap:wrap}
+.detail-name{font-family:'Syne',sans-serif;font-size:21px;font-weight:800}
+.detail-meta{font-size:13px;color:var(--muted);margin-top:3px}
+.detail-mix{font-size:12px;color:var(--muted);margin-top:3px}
+.detail-flags{font-size:12px;color:var(--flag);margin-top:3px}
+.score-box{background:var(--card2);border:1px solid var(--border);border-radius:10px;padding:14px 20px;text-align:center;min-width:120px}
+.score-box .sp{font-family:'Syne',sans-serif;font-size:26px;font-weight:800}
+.score-box .sg{font-family:'Syne',sans-serif;font-size:30px;font-weight:800;margin:3px 0}
+.score-box .ss{font-size:11px;color:var(--muted);margin-top:1px}
+
+.q-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:9px}
+.q-top{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:9px;align-items:center}
+.q-num-badge{font-family:'Syne',sans-serif;font-size:11px;font-weight:700;color:var(--warn);background:var(--warn-l);border:1px solid rgba(249,115,22,.25);border-radius:5px;padding:2px 8px}
+.q-mat{font-family:'Syne',sans-serif;font-size:10px;font-weight:700;border-radius:5px;padding:2px 7px}
+.q-text{font-size:15px;font-weight:500;line-height:1.55;margin-bottom:11px}
+.ans-row{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:10px}
+@media(max-width:580px){.ans-row{grid-template-columns:1fr}}
+.ans-box{background:var(--card2);border:1px solid var(--border);border-radius:7px;padding:11px 12px}
+.ans-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;margin-bottom:5px;font-family:'Syne',sans-serif}
+.ans-lbl.sl{color:var(--muted)}.ans-lbl.cl{color:var(--ok)}.ans-lbl.ml{color:var(--accent)}
+.ans-val{font-size:13px;line-height:1.5}
+.ans-val.ot{font-style:italic;color:#c4c8e0}
+.r-ok{border-color:rgba(34,197,94,.3)!important;background:rgba(34,197,94,.04)!important}
+.r-err{border-color:rgba(239,68,68,.3)!important;background:rgba(239,68,68,.03)!important}
+.r-open{border-color:rgba(108,143,255,.25)!important;background:rgba(108,143,255,.03)!important}
+.r-empty{border-color:rgba(249,115,22,.3)!important;background:rgba(249,115,22,.03)!important}
+.r-flag{outline:2px solid var(--flag);outline-offset:2px}
+
+/* correction row */
+.corr-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding-top:8px;border-top:1px solid var(--border);margin-top:2px}
+.mark-btns{display:flex;gap:5px}
+.mbtn{padding:4px 10px;border-radius:6px;font-family:'Syne',sans-serif;font-size:11px;font-weight:700;border:1px solid var(--border);background:var(--card2);color:var(--muted);cursor:pointer;transition:all .15s}
+.mbtn:hover{border-color:var(--accent)}
+.mbtn.ok{background:var(--ok-l);border-color:var(--ok);color:var(--ok)}
+.mbtn.half{background:rgba(234,179,8,.1);border-color:var(--flag);color:var(--flag)}
+.mbtn.wrong{background:var(--err-l);border-color:var(--err);color:var(--err)}
+.q-comment{flex:1;min-width:160px;background:var(--card);border:1px solid var(--border);border-radius:6px;padding:5px 9px;font-family:'Instrument Sans',sans-serif;font-size:13px;color:var(--text);transition:border-color .15s}
+.q-comment:focus{outline:none;border-color:var(--accent)}
+.q-comment::placeholder{color:var(--muted)}
+
+/* global comment */
+.global-comment-wrap{background:var(--card2);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-top:6px}
+.global-comment-wrap label{font-family:'Syne',sans-serif;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);display:block;margin-bottom:9px}
+.global-comment{width:100%;min-height:80px;resize:vertical;background:var(--card);border:1.5px solid var(--border);border-radius:8px;padding:10px 12px;font-family:'Instrument Sans',sans-serif;font-size:14px;color:var(--text);line-height:1.55;transition:border-color .15s}
+.global-comment:focus{outline:none;border-color:var(--accent)}
+.global-comment::placeholder{color:var(--muted)}
+
+/* ══ PREVIEW ══ */
+.pv-controls{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px;align-items:center}
+.pv-btn{padding:5px 12px;border-radius:6px;font-family:'Syne',sans-serif;font-size:11px;font-weight:700;border:1.5px solid var(--border);background:var(--card2);color:var(--muted);cursor:pointer;transition:all .15s}
+.pv-btn:hover{border-color:var(--accent);color:var(--accent)}
+.pv-btn.on{background:rgba(108,143,255,.1);border-color:var(--accent);color:var(--accent)}
+.pv-count{font-size:12px;color:var(--muted);margin-left:auto}
+.pv-card{background:var(--card);border:1px solid var(--border);border-radius:9px;margin-bottom:8px;overflow:hidden}
+.pv-hdr{display:flex;align-items:center;gap:8px;padding:11px 14px;cursor:pointer;user-select:none}
+.pv-hdr:hover{background:rgba(255,255,255,.012)}
+.pv-idx{font-family:'Syne',sans-serif;font-size:10px;font-weight:700;color:var(--muted);min-width:24px}
+.pv-mat{font-family:'Syne',sans-serif;font-size:10px;font-weight:700;border-radius:4px;padding:2px 6px;flex-shrink:0}
+.pv-lv{font-family:'Syne',sans-serif;font-size:10px;font-weight:700;border-radius:4px;padding:2px 6px;flex-shrink:0}
+.lv-e{color:#22c55e;background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.25)}
+.lv-m{color:#f97316;background:rgba(249,115,22,.1);border:1px solid rgba(249,115,22,.25)}
+.lv-h{color:#c084fc;background:rgba(192,132,252,.1);border:1px solid rgba(192,132,252,.25)}
+.pv-txt{font-size:13px;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pv-type{font-size:11px;color:var(--muted);flex-shrink:0}
+.pv-arr{color:var(--muted);font-size:10px;transition:transform .2s;flex-shrink:0}
+.pv-card.open .pv-arr{transform:rotate(180deg)}
+.pv-body{display:none;padding:0 14px 14px;border-top:1px solid var(--border)}
+.pv-card.open .pv-body{display:block}
+.pv-qfull{font-size:15px;font-weight:500;padding:12px 0 8px;line-height:1.55}
+.pv-opts{display:flex;flex-direction:column;gap:4px;margin-bottom:6px}
+.pv-opt{font-size:13px;padding:6px 9px;background:var(--card2);border-radius:5px;display:flex;gap:7px;align-items:flex-start}
+.pv-opt.cor{background:var(--ok-l);border:1px solid rgba(34,197,94,.25);color:var(--ok)}
+.pv-key{font-family:'Syne',sans-serif;font-size:10px;font-weight:700;min-width:14px;color:var(--muted);flex-shrink:0}
+.pv-opt.cor .pv-key{color:var(--ok)}
+.pv-sample{background:rgba(108,143,255,.07);border:1px solid rgba(108,143,255,.2);border-radius:6px;padding:10px 12px;font-size:13px;color:#a5b4fc;line-height:1.55;margin-top:5px}
+.pv-sample strong{color:var(--accent);font-size:10px;display:block;margin-bottom:4px;letter-spacing:.5px;text-transform:uppercase;font-family:'Syne',sans-serif}
+.pv-pairs{display:flex;flex-direction:column;gap:4px;margin-bottom:6px}
+.pv-pair{display:flex;align-items:center;gap:7px;font-size:13px}
+.pv-pterm{background:var(--card2);border-radius:4px;padding:3px 8px;min-width:120px}
+</style>
+</head>
+<body>
+
+<!-- ══ DROP SCREEN ══ -->
+<div id="drop-screen">
+  <div class="drop-card">
+    <div class="eyebrow">Lehrerauswertung · WPU 3D-Druck</div>
+    <h1>Lernkontrolle<br>Auswerten</h1>
+    <p class="sub">Lade Schülerabgaben oder bereits gespeicherte Korrekturdateien. Beide Formate werden erkannt.</p>
+    <div class="drop-zones">
+      <div class="drop-zone" id="dz-single">
+        <span class="dz-icon">👤</span>
+        <div class="dz-label">Einzelne Schüler</div>
+        <div class="dz-sub">Schülerabgaben oder<br>Einzelkorrekturen (.json)</div>
+        <span class="dz-tag abgaben">Mehrere gleichzeitig möglich</span>
+        <input type="file" accept=".json" multiple onchange="loadFiles(this.files,'single')">
+      </div>
+      <div class="drop-zone ok-zone" id="dz-class">
+        <span class="dz-icon">🏫</span>
+        <div class="dz-label">Klassendatei</div>
+        <div class="dz-sub">Gespeicherte Klassenkorrekturen<br>(.json mit students-Array)</div>
+        <span class="dz-tag korrekturen">1 Datei = ganze Klasse</span>
+        <input type="file" accept=".json" multiple onchange="loadFiles(this.files,'class')">
+      </div>
+    </div>
+    <div class="info-hint">💡 Präsentationsmodus zeigt keine Einzelnoten · Korrekturen hinter Passwort · Kommentare werden in der gespeicherten Datei mit abgelegt</div>
+  </div>
+</div>
+
+<!-- ══ PW MODAL ══ -->
+<div id="pw-modal" class="pw-overlay hidden">
+  <div class="pw-card">
+    <span style="font-size:34px;display:block;margin-bottom:14px">🔐</span>
+    <h2>Korrekturansicht</h2>
+    <p>Bitte Lehrkraft-Passwort eingeben.</p>
+    <div class="pw-row">
+      <input class="pw-inp" type="password" id="pw-inp" placeholder="Passwort" onkeydown="if(event.key==='Enter')checkPw()">
+      <button class="pw-btn" onclick="checkPw()">→</button>
+    </div>
+    <div class="pw-err" id="pw-err"></div>
+    <br><button class="pw-cancel" onclick="cancelPw()">Abbrechen</button>
+  </div>
+</div>
+
+<!-- ══ MAIN ══ -->
+<div id="main-screen">
+  <div class="main-header">
+    <div class="mh-title">WPU 3D-Druck · <span>Auswertung</span></div>
+    <div id="mode-badge"></div>
+    <div class="mh-space"></div>
+    <button class="mh-btn" onclick="openPresMode()">📊 Präsentation</button>
+    <button class="mh-btn" id="btn-corr" onclick="requestCorr()">🔒 Korrektur</button>
+    <div class="mh-sep"></div>
+    <button class="mh-btn" onclick="document.getElementById('add-single').click()">+ Einzelne</button>
+    <button class="mh-btn" onclick="document.getElementById('add-class').click()">+ Klasse</button>
+    <button class="mh-btn" onclick="resetAll()">↺ Neu</button>
+    <input type="file" id="add-single" accept=".json" multiple style="display:none" onchange="loadFiles(this.files,'single')">
+    <input type="file" id="add-class"  accept=".json" multiple style="display:none" onchange="loadFiles(this.files,'class')">
+  </div>
+  <div class="file-chips" id="file-chips"></div>
+  <div class="tabs">
+    <div class="tab active" id="tb-overview" onclick="switchTab('overview')">Übersicht</div>
+    <div class="tab" id="tb-detail" onclick="corrUnlocked?switchTab('detail'):requestCorr()">Detailansicht</div>
+    <div class="tab" id="tb-preview" onclick="corrUnlocked?switchTab('preview'):requestCorr()">Fragenvorschau</div>
+  </div>
+  <div class="tab-content active" id="tab-overview"></div>
+  <div class="tab-content" id="tab-detail"></div>
+  <div class="tab-content" id="tab-preview"></div>
+</div>
+
+<!-- ══ PRESENTATION ══ -->
+<div id="pres-mode">
+  <div class="pres-header">
+    <div class="pres-title">WPU 3D-Druck · <span>Klassenergebnisse</span></div>
+    <button class="pres-close" onclick="document.getElementById('pres-mode').classList.remove('active')">✕ Schließen</button>
+  </div>
+  <div class="pres-body" id="pres-body"></div>
+</div>
+
+<script>
+// ══════════════════════════════════
+// CONSTANTS
+// ══════════════════════════════════
+const CORR_PW = 'Sebbel_ERS';
+const MC = {PLA:'#4ade80',PETG:'#60a5fa','ABS/ASA':'#fb923c',PC:'#c084fc',PET:'#34d399',TPU:'#f472b6'};
+const MB = {PLA:'rgba(74,222,128,.1)',PETG:'rgba(96,165,250,.1)','ABS/ASA':'rgba(251,146,60,.1)',PC:'rgba(192,132,252,.1)',PET:'rgba(52,211,153,.1)',TPU:'rgba(244,114,182,.1)'};
+const GT = [
+  {min:96,g:'1',c:'#22c55e'},{min:92,g:'1−',c:'#4ade80'},
+  {min:88,g:'2+',c:'#86efac'},{min:85,g:'2',c:'#60a5fa'},
+  {min:80,g:'2−',c:'#93c5fd'},{min:75,g:'3+',c:'#a5b4fc'},
+  {min:70,g:'3',c:'#f97316'},{min:65,g:'3−',c:'#fb923c'},
+  {min:60,g:'4+',c:'#fbbf24'},{min:55,g:'4',c:'#fcd34d'},
+  {min:50,g:'4−',c:'#fde68a'},{min:37,g:'5+',c:'#fca5a5'},
+  {min:25,g:'5',c:'#f87171'},{min:13,g:'5−',c:'#ef4444'},
+  {min:0,g:'6',c:'#dc2626'},
+];
+function grade(pct){return GT.find(r=>pct>=r.min)||GT[GT.length-1]}
+function pctCol(p){return p>=0.8?'var(--ok)':p>=0.6?'var(--accent)':p>=0.4?'var(--warn)':'var(--err)'}
+function tlabel(t){return{single:'Einfachauswahl',multi:'Mehrfachauswahl',match:'Zuordnung',open:'Freitext'}[t]||t}
+
+// ══════════════════════════════════
+// STATE
+// ══════════════════════════════════
+let subs = [];         // [{data}]
+let cur  = 0;
+let ms   = {};         // {si:{qi:{mark,comment}}}
+let gc   = {};         // {si: globalComment string}
+let corrUnlocked = false;
+
+// ══════════════════════════════════
+// DRAG & DROP
+// ══════════════════════════════════
+['dz-single','dz-class'].forEach(id => {
+  const el = document.getElementById(id);
+  el.addEventListener('dragover', e => { e.preventDefault(); el.classList.add('drag'); });
+  el.addEventListener('dragleave', () => el.classList.remove('drag'));
+  el.addEventListener('drop', e => {
+    e.preventDefault(); el.classList.remove('drag');
+    loadFiles(e.dataTransfer.files, id === 'dz-class' ? 'class' : 'single');
+  });
+});
+
+function resetAll(){
+  subs=[]; cur=0; ms={}; gc={}; corrUnlocked=false;
+  document.getElementById('main-screen').style.display='none';
+  document.getElementById('drop-screen').style.display='flex';
+  document.getElementById('mode-badge').innerHTML='';
+  document.getElementById('btn-corr').classList.remove('on');
+}
+
+// ══════════════════════════════════
+// LOAD FILES  — two explicit modes
+// ══════════════════════════════════
+function loadFiles(files, mode) {
+  if (!files.length) return;
+  const readers = [...files].map(f => new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = e => { try { res(JSON.parse(e.target.result)); } catch { rej(f.name); } };
+    r.onerror = () => rej(f.name);
+    r.readAsText(f);
+  }));
+
+  Promise.allSettled(readers).then(results => {
+    let added = 0;
+    results.forEach(r => {
+      if (r.status !== 'fulfilled') { console.warn('Fehler:', r.reason); return; }
+      const parsed = r.value;
+
+      if (mode === 'class') {
+        // Klassendatei: erwartet {meta, students:[...]}
+        const list = parsed.students || (Array.isArray(parsed) ? parsed : null);
+        if (!list) { alert('Keine gültige Klassendatei — erwartet wird {students:[...]}'); return; }
+        list.forEach(studentData => {
+          if (!studentData.student) return;
+          const si = subs.length;
+          subs.push({ data: studentData });
+          restoreCorrections(si, studentData);
+          added++;
+        });
+      } else {
+        // Einzeldatei: muss .student haben
+        if (!parsed.student) { alert('Keine gültige Schülerdatei — .student fehlt'); return; }
+        const si = subs.length;
+        subs.push({ data: parsed });
+        restoreCorrections(si, parsed);
+        added++;
+      }
+    });
+
+    if (!subs.length) { alert('Keine Daten geladen.'); return; }
+    document.getElementById('drop-screen').style.display = 'none';
+    document.getElementById('main-screen').style.display = 'block';
+    buildChips();
+    renderOverview();
+  });
+}
+
+// Restore previously saved corrections from a loaded file
+function restoreCorrections(si, data) {
+  if (data.exam?.questions) {
+    ms[si] = {};
+    data.exam.questions.forEach((q, qi) => {
+      if (q.teacherMark || q.teacherComment) {
+        ms[si][qi] = { mark: q.teacherMark||'', comment: q.teacherComment||'' };
+      }
+    });
+  }
+  if (data.result?.teacherComment) gc[si] = data.result.teacherComment;
+}
+
+// ══════════════════════════════════
+// CHIPS
+// ══════════════════════════════════
+function buildChips() {
+  const byClass = {};
+  subs.forEach((s, i) => {
+    const kl = s.data.student.klasse;
+    (byClass[kl] = byClass[kl]||[]).push(i);
+  });
+  let h = '';
+  Object.entries(byClass).sort().forEach(([kl, idxs]) => {
+    h += `<span class="fchip-class">${kl}</span>`;
+    idxs.forEach(i => {
+      const st = subs[i].data.student;
+      h += `<div class="fchip${i===cur?' active':''}" id="chip-${i}" onclick="selectSub(${i})">${st.vorname} ${st.nachname}</div>`;
+    });
+  });
+  document.getElementById('file-chips').innerHTML = h;
+}
+
+function selectSub(i) {
+  if (!corrUnlocked) { requestCorr(); return; }
+  cur = i; buildChips(); showDetail(i); switchTab('detail');
+}
+
+// ══════════════════════════════════
+// PASSWORD
+// ══════════════════════════════════
+function requestCorr() {
+  if (corrUnlocked) { switchTab('detail'); showDetail(cur); return; }
+  document.getElementById('pw-err').textContent = '';
+  document.getElementById('pw-inp').value = '';
+  document.getElementById('pw-modal').classList.remove('hidden');
+  setTimeout(() => document.getElementById('pw-inp').focus(), 80);
+}
+function cancelPw() { document.getElementById('pw-modal').classList.add('hidden'); }
+function checkPw() {
+  if (document.getElementById('pw-inp').value === CORR_PW) {
+    corrUnlocked = true;
+    document.getElementById('pw-modal').classList.add('hidden');
+    document.getElementById('mode-badge').innerHTML = '<span class="mode-badge corr">🔓 Korrekturmodus</span>';
+    document.getElementById('btn-corr').classList.add('on');
+    showDetail(cur); switchTab('detail');
+  } else {
+    document.getElementById('pw-err').textContent = 'Falsches Passwort.';
+    document.getElementById('pw-inp').value = '';
+    document.getElementById('pw-inp').focus();
+  }
+}
+
+// ══════════════════════════════════
+// TABS
+// ══════════════════════════════════
+function switchTab(t) {
+  ['overview','detail','preview'].forEach(id => {
+    document.getElementById('tb-'+id).classList.toggle('active', id===t);
+    document.getElementById('tab-'+id).classList.toggle('active', id===t);
+  });
+  if (t==='overview') renderOverview();
+  if (t==='preview' && corrUnlocked) renderPreview();
+}
+
+// ══════════════════════════════════
+// SCORING
+// ══════════════════════════════════
+function autoScore(sub) {
+  let cor=0, tot=0, open=0;
+  sub.data.exam.questions.forEach(q => {
+    if (q.type==='open'){open++;return;}
+    tot++;
+    if (isRight(q)) cor++;
+  });
+  return {cor, tot, open};
+}
+function manualPts(si) {
+  return Object.values(ms[si]||{}).reduce((a,v)=>a+(v.mark==='ok'?1:v.mark==='half'?0.5:0), 0);
+}
+function totScore(si) {
+  const {cor,tot,open} = autoScore(subs[si]);
+  const man = manualPts(si);
+  return {auto:cor, autoMax:tot, man, open, grand:cor+man, grandMax:tot+open};
+}
+function isRight(q) {
+  if (!q.studentAnswer) return false;
+  if (q.type==='single') return q.studentAnswer===q.correctAnswer;
+  if (q.type==='multi') return [...q.studentAnswer].sort().join('|')===[...q.correctAnswer].sort().join('|');
+  if (q.type==='match') return Array.isArray(q.correctAnswer)&&Array.isArray(q.studentAnswer)&&
+    q.correctAnswer.length===q.studentAnswer.length&&
+    q.correctAnswer.every(c=>q.studentAnswer.some(s=>s.term===c.term&&s.chosen===c.correct));
+  return false;
+}
+
+// ══════════════════════════════════
+// GRADE SCALE HTML
+// ══════════════════════════════════
+function gradeScaleHtml() {
+  return `<div class="grade-scale-wrap"><h3>Notenschlüssel</h3><div class="grade-chips">
+    ${GT.map(r=>`<div class="gchip" style="background:${r.c}18;border:1px solid ${r.c}44"><span class="gn" style="color:${r.c}">${r.g}</span><span class="gp">≥${r.min}%</span></div>`).join('')}
+  </div></div>`;
+}
+
+// ══════════════════════════════════
+// OVERVIEW
+// ══════════════════════════════════
+function renderOverview() {
+  const scores = subs.map((_,i)=>totScore(i));
+  const avgPct = scores.reduce((a,s)=>a+(s.grandMax?s.grand/s.grandMax:0),0)/scores.length;
+  const avgG = grade(Math.round(avgPct*100));
+
+  const matS = {};
+  subs.forEach(s=>s.data.exam.questions.forEach(q=>{
+    if(q.type==='open')return;
+    if(!matS[q.material])matS[q.material]={ok:0,tot:0};
+    matS[q.material].tot++;
+    if(isRight(q))matS[q.material].ok++;
+  }));
+
+  let h = gradeScaleHtml();
+
+  // stats
+  const bestPts = Math.max(...scores.map(s=>s.grand));
+  h += `<div class="stat-grid">
+    <div class="stat-card"><div class="sc-val acc-val">${subs.length}</div><div class="sc-label">Abgaben geladen</div></div>
+    <div class="stat-card"><div class="sc-val ${avgPct>=.8?'ok-val':avgPct>=.6?'acc-val':avgPct>=.4?'warn-val':'err-val'}">${Math.round(avgPct*100)}%</div><div class="sc-label">Ø Ergebnis</div></div>
+    <div class="stat-card"><div class="sc-val" style="color:${avgG.c}">${avgG.g}</div><div class="sc-label">Ø Note</div></div>
+    <div class="stat-card"><div class="sc-val ok-val">${bestPts}</div><div class="sc-label">Beste Leistung (Pkt.)</div></div>
+  </div>`;
+
+  // material
+  h += `<div class="cat-grid"><div class="cat-card"><h4>Trefferquote je Material</h4>`;
+  Object.entries(matS).forEach(([mat,d])=>{
+    const p=d.tot?d.ok/d.tot:0; const c=MC[mat]||'var(--accent)';
+    h+=`<div class="cat-row"><div class="cat-name" style="color:${c}">${mat}</div><div class="cat-track"><div class="cat-fill" style="width:${Math.round(p*100)}%;background:${c}"></div></div><div class="cat-pct">${Math.round(p*100)}%</div></div>`;
+  });
+  h += `</div></div>`;
+
+  // note distribution (anonymous)
+  const noteOrder=['1','1−','2+','2','2−','3+','3','3−','4+','4','4−','5+','5','5−','6'];
+  const nd={};
+  scores.forEach(sc=>{const p=sc.grandMax?Math.round(sc.grand/sc.grandMax*100):0;const g=grade(p).g;nd[g]=(nd[g]||0)+1;});
+  h+=`<div class="tbl-wrap"><div class="tbl-head"><h3>Notenverteilung (anonym)</h3></div>
+    <table><thead><tr><th>Note</th><th>Anzahl</th><th>Anteil</th><th></th></tr></thead><tbody>`;
+  noteOrder.forEach(n=>{
+    if(!nd[n])return;
+    const cnt=nd[n], p=Math.round(cnt/subs.length*100), c=GT.find(r=>r.g===n)?.c||'var(--muted)';
+    h+=`<tr><td><span style="font-family:'Syne',sans-serif;font-size:15px;font-weight:800;color:${c}">${n}</span></td>
+      <td>${cnt}</td><td>${p}%</td>
+      <td><div class="sbar-wrap"><div class="sbar-track"><div class="sbar-fill" style="width:${p}%;background:${c}"></div></div></div></td></tr>`;
+  });
+  h+=`</tbody></table></div>`;
+
+  // individual table only when correction unlocked
+  if (corrUnlocked) {
+    h+=`<div class="tbl-wrap"><div class="tbl-head"><h3>Einzelergebnisse (Korrekturmodus)</h3></div>
+      <table><thead><tr><th>Name</th><th>Klasse</th><th>Auto</th><th>Manuell</th><th>Gesamt</th><th>Note</th><th></th></tr></thead><tbody>`;
+    subs.forEach((s,i)=>{
+      const sc=scores[i], pct=sc.grandMax?Math.round(sc.grand/sc.grandMax*100):0, gr=grade(pct);
+      h+=`<tr>
+        <td><strong>${s.data.student.vorname} ${s.data.student.nachname}</strong></td>
+        <td>${s.data.student.klasse}</td>
+        <td>${sc.auto}/${sc.autoMax}</td>
+        <td style="color:var(--accent)">${sc.man}/${sc.open}</td>
+        <td><strong style="color:${pctCol(pct/100)}">${sc.grand}/${sc.grandMax} (${pct}%)</strong></td>
+        <td><span style="font-family:'Syne',sans-serif;font-size:16px;font-weight:800;color:${gr.c}">${gr.g}</span></td>
+        <td><button class="mbtn" onclick="selectSub(${i})">Korrektur →</button></td>
+      </tr>`;
+    });
+    h+=`</tbody></table></div>`;
+  } else {
+    h+=`<div style="text-align:center;padding:18px;color:var(--muted);font-size:14px">
+      🔒 Einzelergebnisse und Korrekturen sind nach Eingabe des Passworts zugänglich.
+    </div>`;
+  }
+
+  document.getElementById('tab-overview').innerHTML = h;
+}
+
+// ══════════════════════════════════
+// PRESENTATION
+// ══════════════════════════════════
+function openPresMode() {
+  const scores = subs.map((_,i)=>totScore(i));
+  const avgPct = scores.reduce((a,s)=>a+(s.grandMax?s.grand/s.grandMax:0),0)/scores.length;
+  const avgG = grade(Math.round(avgPct*100));
+  const bestPts = Math.max(...scores.map(s=>s.grand));
+  const matS = {};
+  subs.forEach(s=>s.data.exam.questions.forEach(q=>{
+    if(q.type==='open')return;
+    if(!matS[q.material])matS[q.material]={ok:0,tot:0};
+    matS[q.material].tot++;if(isRight(q))matS[q.material].ok++;
+  }));
+
+  let h = '';
+  // grade scale
+  h+=`<div class="pres-section"><div class="pres-section-title">Notenschlüssel</div>
+    <div style="display:flex;gap:7px;flex-wrap:wrap">
+      ${GT.map(r=>`<div class="gchip" style="background:${r.c}18;border:1px solid ${r.c}44;padding:9px 12px"><span class="gn" style="color:${r.c};font-size:16px">${r.g}</span><span class="gp" style="font-size:10px">≥${r.min}%</span></div>`).join('')}
+    </div></div>`;
+  // stats
+  h+=`<div class="pres-section"><div class="pres-section-title">Überblick Klasse</div>
+    <div class="pres-stat-grid">
+      <div class="pres-stat"><div class="psv acc-val">${subs.length}</div><div class="psl">Abgaben</div></div>
+      <div class="pres-stat"><div class="psv ${avgPct>=.8?'ok-val':avgPct>=.6?'acc-val':avgPct>=.4?'warn-val':'err-val'}">${Math.round(avgPct*100)}%</div><div class="psl">Ø Ergebnis</div></div>
+      <div class="pres-stat"><div class="psv" style="color:${avgG.c}">${avgG.g}</div><div class="psl">Ø Note</div></div>
+      <div class="pres-stat"><div class="psv ok-val">${bestPts}</div><div class="psl">Beste Leistung</div></div>
+    </div></div>`;
+  // material
+  h+=`<div class="pres-section"><div class="pres-section-title">Trefferquote je Material</div>
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:18px;display:flex;flex-direction:column;gap:11px">`;
+  Object.entries(matS).forEach(([mat,d])=>{
+    const p=d.tot?d.ok/d.tot:0; const c=MC[mat]||'var(--accent)';
+    h+=`<div style="display:flex;align-items:center;gap:14px">
+      <div style="width:90px;font-family:'Syne',sans-serif;font-size:13px;font-weight:700;color:${c}">${mat}</div>
+      <div style="flex:1;height:9px;background:var(--border);border-radius:99px;overflow:hidden"><div style="height:100%;width:${Math.round(p*100)}%;background:${c};border-radius:99px"></div></div>
+      <div style="font-family:'Syne',sans-serif;font-size:14px;font-weight:700;color:${c};min-width:40px;text-align:right">${Math.round(p*100)}%</div>
+    </div>`;
+  });
+  h+=`</div></div>`;
+  // anonymous note chart
+  const noteOrder=['1','1−','2+','2','2−','3+','3','3−','4+','4','4−','5+','5','5−','6'];
+  const nd={};
+  scores.forEach(sc=>{const p=sc.grandMax?Math.round(sc.grand/sc.grandMax*100):0;const g=grade(p).g;nd[g]=(nd[g]||0)+1;});
+  const maxCnt=Math.max(...Object.values(nd),1);
+  h+=`<div class="pres-section"><div class="pres-section-title">Notenverteilung (anonym)</div>
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:24px">
+      <div style="display:flex;align-items:flex-end;gap:8px;height:130px;margin-bottom:8px">`;
+  noteOrder.forEach(n=>{
+    if(!nd[n])return;
+    const bh=Math.round((nd[n]/maxCnt)*110), c=GT.find(r=>r.g===n)?.c||'var(--muted)';
+    h+=`<div style="display:flex;flex-direction:column;align-items:center;gap:3px;flex:1">
+      <div style="font-family:'Syne',sans-serif;font-size:13px;font-weight:700;color:${c}">${nd[n]}</div>
+      <div style="width:100%;height:${bh}px;background:${c}55;border:1px solid ${c}88;border-radius:5px 5px 0 0;min-height:6px"></div>
+    </div>`;
+  });
+  h+=`</div><div style="display:flex;gap:8px">`;
+  noteOrder.forEach(n=>{
+    if(!nd[n])return;
+    const c=GT.find(r=>r.g===n)?.c||'var(--muted)';
+    h+=`<div style="flex:1;text-align:center;font-family:'Syne',sans-serif;font-size:12px;font-weight:800;color:${c}">${n}</div>`;
+  });
+  h+=`</div></div></div>`;
+
+  document.getElementById('pres-body').innerHTML = h;
+  document.getElementById('pres-mode').classList.add('active');
+  document.getElementById('pres-mode').scrollTop = 0;
+}
+
+// ══════════════════════════════════
+// DETAIL / CORRECTION
+// ══════════════════════════════════
+function lvPill(lv) {
+  const m={easy:{l:'●Leicht',c:'#22c55e',bg:'rgba(34,197,94,.1)'},medium:{l:'●●Mittel',c:'#f97316',bg:'rgba(249,115,22,.1)'},hard:{l:'●●●Schwer',c:'#c084fc',bg:'rgba(192,132,252,.1)'}};
+  const d=m[lv]||m.medium;
+  return `<span style="font-family:'Syne',sans-serif;font-size:10px;font-weight:700;border-radius:4px;padding:2px 7px;color:${d.c};background:${d.bg};border:1px solid ${d.c}44">${d.l}</span>`;
+}
+
+function showDetail(i) {
+  cur = i;
+  const sub = subs[i].data;
+  const sc  = totScore(i);
+  const pct = sc.grandMax ? Math.round(sc.grand/sc.grandMax*100) : 0;
+  const gr  = grade(pct);
+  const st  = sub.student;
+  const ts  = sub.meta.totalTimeSeconds;
+  const tm  = String(Math.floor(ts/60)).padStart(2,'0')+':'+String(ts%60).padStart(2,'0');
+  const flagged = sub.exam.flaggedQuestions||[];
+  const klasse  = st.klasse;
+  const classes = [...new Set(subs.map(s=>s.data.student.klasse))];
+
+  let h = `
+  <div class="save-bar">
+    <div>
+      <div class="save-bar-title">Korrektur: ${st.vorname} ${st.nachname}</div>
+      <div class="save-bar-sub">Klasse ${klasse} · ${new Date(sub.meta.timestamp).toLocaleDateString('de-DE')} · ${tm}</div>
+    </div>
+    <div class="save-space"></div>
+    <button class="save-btn ind" onclick="dlIndividual(${i})">⬇ Einzelkorrektur</button>
+    <button class="save-btn cls" onclick="dlClass('${klasse}')">⬇ Klasse ${klasse}</button>
+    ${classes.length>1?`<button class="save-btn cls" style="opacity:.75" onclick="dlAllClasses()">⬇ Alle Klassen</button>`:''}
+    <span class="save-msg" id="sm-${i}">✓ Gespeichert!</span>
+  </div>
+
+  <div class="detail-header">
+    <div>
+      <div class="detail-name">${st.vorname} ${st.nachname}</div>
+      <div class="detail-meta">Klasse ${klasse} · ${new Date(sub.meta.timestamp).toLocaleString('de-DE')} · Zeit: ${tm}</div>
+      ${sub.levelMix?`<div class="detail-mix">Niveau: <span style="color:#22c55e">${sub.levelMix.easy}×L</span> · <span style="color:#f97316">${sub.levelMix.medium}×M</span> · <span style="color:#c084fc">${sub.levelMix.hard}×S</span></div>`:''}
+      ${flagged.length?`<div class="detail-flags">⚑ Markiert: Frage ${flagged.map(f=>f+1).join(', ')}</div>`:''}
+    </div>
+    <div class="score-box">
+      <div class="sp" style="color:${pctCol(pct/100)}">${pct}%</div>
+      <div class="sg" style="color:${gr.c}">${gr.g}</div>
+      <div class="ss">${sc.grand}/${sc.grandMax} Pkt.</div>
+      <div class="ss">${sc.auto} auto · ${sc.man} manuell</div>
+    </div>
+  </div>`;
+
+  sub.exam.questions.forEach((q, qi) => {
+    const m = (ms[i]||{})[qi]||{};
+    const mc2 = MC[q.material]||'#aaa', mb2 = MB[q.material]||'rgba(170,170,170,.1)';
+    const isFl = flagged.includes(qi);
+    let sc2='', sp='';
+    if (q.type==='open') {
+      sc2=q.studentAnswer?'r-open':'r-empty';
+      sp=q.studentAnswer?'<span class="pill pill-open">Freitext – bitte bewerten</span>':'<span class="pill pill-warn">Keine Antwort</span>';
+    } else {
+      if (!q.studentAnswer){sc2='r-empty';sp='<span class="pill pill-warn">Nicht beantwortet</span>';}
+      else if(isRight(q)){sc2='r-ok';sp='<span class="pill pill-ok">✓ Richtig</span>';}
+      else{sc2='r-err';sp='<span class="pill pill-err">✗ Falsch</span>';}
+    }
+
+    h+=`<div class="q-card ${sc2}${isFl?' r-flag':''}">
+      <div class="q-top">
+        <span class="q-num-badge">Frage ${q.index}</span>
+        <span class="q-mat" style="color:${mc2};background:${mb2};border:1px solid ${mc2}44">${q.material}</span>
+        ${lvPill(q.level)}
+        <span style="font-size:10px;color:var(--muted);background:var(--card2);border:1px solid var(--border);border-radius:4px;padding:2px 7px">${q.category}</span>
+        ${sp}
+        ${isFl?'<span style="color:var(--flag);font-size:12px">⚑</span>':''}
+        ${q.timeSpentSeconds!=null?`<span style="font-size:11px;color:var(--muted);margin-left:auto">${q.timeSpentSeconds}s</span>`:''}
+      </div>
+      <div class="q-text">${q.questionText}</div>
+      <div class="ans-row">
+        <div class="ans-box">
+          <div class="ans-lbl sl">Schülerantwort</div>
+          <div class="ans-val${q.type==='open'?' ot':''}">${fmtS(q)}</div>
+        </div>`;
+    if (q.type!=='open') {
+      h+=`<div class="ans-box"><div class="ans-lbl cl">✓ Richtige Antwort</div><div class="ans-val">${fmtC(q)}</div></div>`;
+    } else {
+      h+=`<div class="ans-box"><div class="ans-lbl ml">Musterlösung (Lehrkraft)</div><div class="ans-val">${q.sampleAnswer||'–'}</div></div>`;
+    }
+    h+=`</div>
+      <div class="corr-row">`;
+    if (q.type==='open') {
+      h+=`<div class="mark-btns">
+          <button class="mbtn${m.mark==='ok'?' ok':''}" onclick="markQ(${i},${qi},'ok')">✓ Richtig (1)</button>
+          <button class="mbtn${m.mark==='half'?' half':''}" onclick="markQ(${i},${qi},'half')">½ Teilrichtig</button>
+          <button class="mbtn${m.mark==='wrong'?' wrong':''}" onclick="markQ(${i},${qi},'wrong')">✗ Falsch (0)</button>
+        </div>`;
+    }
+    h+=`<input class="q-comment" type="text" placeholder="Kommentar zu Frage ${q.index} …"
+          value="${(m.comment||'').replace(/"/g,'&quot;')}"
+          oninput="saveComment(${i},${qi},this.value)">
+      </div>
+    </div>`;
+  });
+
+  // global comment
+  h+=`<div class="global-comment-wrap">
+    <label>💬 Gesamtkommentar / Rückmeldung an Schüler</label>
+    <textarea class="global-comment"
+      placeholder="z. B.: Gute Leistung! Die Freitextantworten könnten etwas ausführlicher sein …"
+      oninput="gc[${i}]=this.value"
+    >${gc[i]||''}</textarea>
+  </div>`;
+
+  document.getElementById('tab-detail').innerHTML = h;
+}
+
+function markQ(si, qi, mark) {
+  if (!ms[si]) ms[si]={};
+  if (!ms[si][qi]) ms[si][qi]={mark:'',comment:''};
+  ms[si][qi].mark = mark;
+  showDetail(si); renderOverview();
+}
+function saveComment(si, qi, val) {
+  if (!ms[si]) ms[si]={};
+  if (!ms[si][qi]) ms[si][qi]={mark:'',comment:''};
+  ms[si][qi].comment = val;
+}
+
+function fmtS(q) {
+  if (!q.studentAnswer) return '<em style="color:var(--muted)">Keine Antwort</em>';
+  if (typeof q.studentAnswer==='string') return q.studentAnswer;
+  if (Array.isArray(q.studentAnswer)) {
+    if (typeof q.studentAnswer[0]==='string') return q.studentAnswer.join('<br>');
+    return q.studentAnswer.map(s=>`${s.term} → ${s.chosen}`).join('<br>');
+  }
+  return JSON.stringify(q.studentAnswer);
+}
+function fmtC(q) {
+  if (!q.correctAnswer) return '–';
+  if (typeof q.correctAnswer==='string') return q.correctAnswer;
+  if (Array.isArray(q.correctAnswer)) {
+    if (typeof q.correctAnswer[0]==='string') return q.correctAnswer.join('<br>');
+    return q.correctAnswer.map(c=>`${c.term} → ${c.correct}`).join('<br>');
+  }
+  return '–';
+}
+
+// ══════════════════════════════════
+// SAVE / DOWNLOAD
+// ══════════════════════════════════
+function buildPayload(i) {
+  const sub = subs[i].data;
+  const sc  = totScore(i);
+  const pct = sc.grandMax ? Math.round(sc.grand/sc.grandMax*100) : 0;
+  const gr  = grade(pct);
+  const m   = ms[i]||{};
+  // Read current global comment from textarea if visible
+  const gcEl = document.getElementById(`tab-detail`)?.querySelector('.global-comment');
+  if (gcEl && cur===i) gc[i] = gcEl.value;
+
+  return {
+    meta: {...sub.meta, correctedAt:new Date().toISOString(), tool:'WPU-3DDruck-Auswertung'},
+    student: sub.student,
+    levelMix: sub.levelMix,
+    result: {
+      totalPoints: sc.grand,
+      maxPoints:   sc.grandMax,
+      autoPoints:  sc.auto,
+      manualPoints:sc.man,
+      percentageTotal: pct,
+      grade: gr.g,
+      teacherComment: gc[i]||null,
+    },
+    exam: {
+      ...sub.exam,
+      questions: sub.exam.questions.map((q,qi) => ({
+        ...q,
+        autoCorrect:    q.type!=='open' ? isRight(q) : null,
+        teacherMark:    m[qi]?.mark    || null,
+        teacherComment: m[qi]?.comment || null,
+        pointsAwarded: q.type!=='open'
+          ? (isRight(q)?1:0)
+          : (m[qi]?.mark==='ok'?1 : m[qi]?.mark==='half'?0.5 : 0),
+      }))
+    }
+  };
+}
+
+function dlJSON(obj, fn) {
+  const b = new Blob([JSON.stringify(obj,null,2)],{type:'application/json'});
+  const u = URL.createObjectURL(b);
+  const a = document.createElement('a'); a.href=u; a.download=fn; a.click();
+  URL.revokeObjectURL(u);
+}
+
+function dlIndividual(i) {
+  const st = subs[i].data.student;
+  dlJSON(buildPayload(i), `korrektur_${st.nachname.toLowerCase()}_${st.vorname.toLowerCase()}_${st.klasse}_${new Date().toISOString().slice(0,10)}.json`);
+  const el = document.getElementById(`sm-${i}`);
+  if (el) { el.style.display='block'; setTimeout(()=>el.style.display='none',2500); }
+}
+
+function dlClass(klasse) {
+  const idxs = subs.map((s,i)=>s.data.student.klasse===klasse?i:-1).filter(i=>i>=0);
+  dlJSON(
+    {meta:{tool:'WPU-3DDruck-Auswertung',exportedAt:new Date().toISOString(),klasse,format:'class'},
+     students: idxs.map(i=>buildPayload(i))},
+    `korrektur_klasse_${klasse}_${new Date().toISOString().slice(0,10)}.json`
+  );
+}
+
+function dlAllClasses() {
+  [...new Set(subs.map(s=>s.data.student.klasse))].forEach(kl=>dlClass(kl));
+}
+
+// ══════════════════════════════════
+// PREVIEW
+// ══════════════════════════════════
+let pvF = {mat:'',lv:'',tp:''};
+function renderPreview() {
+  if (!subs.length) return;
+  const seen=new Set(), all=[];
+  subs.forEach(s=>s.data.exam.questions.forEach(q=>{
+    const k=q.questionText+'|'+q.material;
+    if(!seen.has(k)){seen.add(k);all.push(q);}
+  }));
+  const lo={easy:0,medium:1,hard:2};
+  all.sort((a,b)=>(lo[a.level]||0)-(lo[b.level]||0)||a.material.localeCompare(b.material));
+  const fil=all.filter(q=>(!pvF.mat||q.material===pvF.mat)&&(!pvF.lv||q.level===pvF.lv)&&(!pvF.tp||q.type===pvF.tp));
+
+  const mats=['PLA','PETG','ABS/ASA','PC','PET','TPU'];
+  let fh=mats.map(m=>`<button class="pv-btn${pvF.mat===m?' on':''}" onclick="setPvF('mat','${m}')">${m}</button>`).join('');
+  fh+=`<span style="color:var(--border2);margin:0 3px">|</span>`;
+  [['','Alle'],['easy','●L'],['medium','●●M'],['hard','●●●S']].forEach(([v,l])=>fh+=`<button class="pv-btn${pvF.lv===v?' on':''}" onclick="setPvF('lv','${v}')">${l}</button>`);
+  fh+=`<span style="color:var(--border2);margin:0 3px">|</span>`;
+  [['','Alle'],['single','Einzel'],['multi','Mehrfach'],['match','Zuordnung'],['open','Freitext']].forEach(([v,l])=>fh+=`<button class="pv-btn${pvF.tp===v?' on':''}" onclick="setPvF('tp','${v}')">${l}</button>`);
+  fh+=`<button class="pv-btn" style="margin-left:8px" onclick="setPvF('all','')">↺</button>`;
+  fh+=`<span class="pv-count">${fil.length} Fragen</span>`;
+
+  const lb='ABCDE';
+  let qh='';
+  fil.forEach((q,fi)=>{
+    const mc2=MC[q.material]||'#aaa', mb2=MB[q.material]||'rgba(170,170,170,.1)';
+    const lvcls={easy:'lv-e',medium:'lv-m',hard:'lv-h'}[q.level]||'lv-m';
+    const lvlbl={easy:'●Leicht',medium:'●●Mittel',hard:'●●●Schwer'}[q.level]||q.level;
+    let body='';
+    if((q.type==='single'||q.type==='multi')&&q.opts){
+      const cs=new Set(Array.isArray(q.correctAnswer)?q.correctAnswer:[q.correctAnswer]);
+      body=`<div class="pv-opts">`+q.opts.map((o,i)=>`<div class="pv-opt${cs.has(o)?' cor':''}"><span class="pv-key">${lb[i]}</span>${o}${cs.has(o)?' ✓':''}</div>`).join('')+`</div>`;
+    }else if(q.type==='match'&&Array.isArray(q.correctAnswer)){
+      body=`<div class="pv-pairs">`+q.correctAnswer.map(p=>`<div class="pv-pair"><span class="pv-pterm">${p.term}</span><span style="color:var(--muted)">→</span><span style="color:var(--ok)">✓ ${p.correct}</span></div>`).join('')+`</div>`;
+    }else if(q.type==='open'&&q.sampleAnswer){
+      body=`<div class="pv-sample"><strong>Musterlösung</strong>${q.sampleAnswer}</div>`;
+    }
+    qh+=`<div class="pv-card" id="pv${fi}">
+      <div class="pv-hdr" onclick="document.getElementById('pv${fi}').classList.toggle('open')">
+        <span class="pv-idx">${fi+1}</span>
+        <span class="pv-mat" style="color:${mc2};background:${mb2};border:1px solid ${mc2}44">${q.material}</span>
+        <span class="pv-lv ${lvcls}">${lvlbl}</span>
+        <span class="pv-txt">${q.questionText}</span>
+        <span class="pv-type">${tlabel(q.type)}</span>
+        <span class="pv-arr">▼</span>
+      </div>
+      <div class="pv-body"><div class="pv-qfull">${q.questionText}</div>${body}</div>
+    </div>`;
+  });
+  document.getElementById('tab-preview').innerHTML=`<div class="pv-controls">${fh}</div>${qh}`;
+}
+function setPvF(k,v){
+  if(k==='all')pvF={mat:'',lv:'',tp:''};
+  else pvF[k]=pvF[k]===v?'':v;
+  renderPreview();
+}
+</script>
+</body>
+</html>
