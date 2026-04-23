@@ -252,16 +252,16 @@ tr:hover td{background:rgba(255,255,255,.01)}
       <div class="drop-zone" id="dz-single">
         <span class="dz-icon">👤</span>
         <div class="dz-label">Einzelne Schüler</div>
-        <div class="dz-sub">Schülerabgaben (.json)<br>oder Einzelkorrekturen (.lk.enc)</div>
+        <div class="dz-sub">Schülerabgaben (.json)<br>oder Einzelkorrekturen (.lkenc.txt)</div>
         <span class="dz-tag abgaben">Mehrere gleichzeitig möglich</span>
-        <input type="file" accept=".json,.lk.enc" multiple onchange="loadFiles(this.files,'single')">
+        <input type="file" accept=".json,.lkenc.txt" multiple onchange="loadFiles(this.files,'single')">
       </div>
       <div class="drop-zone ok-zone" id="dz-class">
         <span class="dz-icon">🏫</span>
         <div class="dz-label">Klassendatei</div>
-        <div class="dz-sub">Verschlüsselte Klassendatei (.lk.enc)<br>oder unverschlüsselte JSON</div>
+        <div class="dz-sub">Verschlüsselte Klassendatei (.lkenc.txt)<br>oder unverschlüsselte JSON</div>
         <span class="dz-tag korrekturen">1 Datei = ganze Klasse</span>
-        <input type="file" accept=".lk.enc,.json" multiple onchange="loadFiles(this.files,'class')">
+        <input type="file" accept=".lkenc.txt,.json" multiple onchange="loadFiles(this.files,'class')">
       </div>
     </div>
     <div class="info-hint">💡 Präsentationsmodus zeigt keine Einzelnoten · Korrekturen hinter Passwort · Kommentare werden in der gespeicherten Datei mit abgelegt</div>
@@ -295,8 +295,8 @@ tr:hover td{background:rgba(255,255,255,.01)}
     <button class="mh-btn" onclick="document.getElementById('add-single').click()">+ Einzelne</button>
     <button class="mh-btn" onclick="document.getElementById('add-class').click()">+ Klasse</button>
     <button class="mh-btn" onclick="resetAll()">↺ Neu</button>
-    <input type="file" id="add-single" accept=".json,.lk.enc" multiple style="display:none" onchange="loadFiles(this.files,'single')">
-    <input type="file" id="add-class"  accept=".lk.enc,.json" multiple style="display:none" onchange="loadFiles(this.files,'class')">
+    <input type="file" id="add-single" accept=".json,.lkenc.txt" multiple style="display:none" onchange="loadFiles(this.files,'single')">
+    <input type="file" id="add-class"  accept=".lkenc.txt,.json" multiple style="display:none" onchange="loadFiles(this.files,'class')">
   </div>
   <div class="file-chips" id="file-chips"></div>
   <div class="tabs">
@@ -803,7 +803,7 @@ function showDetail(i) {
     <button class="save-btn cls" onclick="dlClassIndividual('${klasse}')">⬇ Klasse ${klasse} (Einzeln)</button>
     <button class="save-btn cls" style="opacity:.75" onclick="dlClass('${klasse}')">⬇ Klasse ${klasse} (Gesamt)</button>
     ${classes.length>1?`<button class="save-btn cls" style="opacity:.6" onclick="dlAllClasses()">⬇ Alle Klassen (Gesamt)</button>`:''}
-    <span class="save-msg" id="sm-${i}">✓ .lk.enc + .txt heruntergeladen!</span>
+    <span class="save-msg" id="sm-${i}">✓ .lkenc.txt + _passwort.txt heruntergeladen!</span>
   </div>
 
   <div class="detail-header">
@@ -960,7 +960,7 @@ function buildPayload(i) {
 // DOWNLOAD FUNCTIONS
 // ══════════════════════════════════════════════════
 
-// Einzelkorrektur: zufälliges Passwort, .lk.enc + .txt mit gleichem Basisnamen
+// Einzelkorrektur: zufälliges Passwort, .lkenc.txt + .txt mit gleichem Basisnamen
 async function dlIndividual(i, silent=false) {
   const st   = subs[i].data.student;
   const pw   = generatePw();  // einmal generieren, für beide Dateien verwenden
@@ -969,14 +969,14 @@ async function dlIndividual(i, silent=false) {
   // Erst verschlüsseln, dann beide Dateien mit kurzem Delay herunterladen
   const encrypted = await encryptJSON(buildPayload(i), pw);
 
-  // .lk.enc herunterladen
-  dlBlob(encrypted, `${base}.lk.enc`);
+  // .lkenc.txt herunterladen
+  dlBlob(encrypted, `${base}.lkenc.txt`);
 
   // 200ms warten damit Browser den ersten Download registriert
   await new Promise(r => setTimeout(r, 200));
 
   // .txt mit exakt demselben Passwort herunterladen
-  dlBlob(pw, `${base}.txt`, 'text/plain');
+  dlBlob(pw, `${base}_passwort.txt`, 'text/plain');
 
   if (!silent) {
     const el = document.getElementById(`sm-${i}`);
@@ -991,7 +991,7 @@ async function dlClass(klasse) {
     meta: { tool:'WPU-3DDruck-Auswertung', exportedAt:new Date().toISOString(), klasse, format:'class' },
     students: idxs.map(i => buildPayload(i))
   };
-  const fn = `kor_klasse-${klasse}_${new Date().toISOString().slice(0,10)}.lk.enc`;
+  const fn = `kor_klasse-${klasse}_${new Date().toISOString().slice(0,10)}.lkenc.txt`;
   const encrypted = await encryptJSON(payload, CLASS_ENC_PW);
   dlBlob(encrypted, fn);
 }
